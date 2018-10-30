@@ -1,0 +1,16 @@
+# set -x
+dsjob -lprojects > .projetos.txt 2>/dev/null
+
+while read proj
+do
+# echo $proj
+  dsjob -ljobs $proj > .jobs.txt 2>/dev/null
+  while read job
+  do
+    if [ $job = $1 ]
+    then
+     echo "O job "$job" pertence ao  projeto! "$proj 
+#    exit 
+    fi
+   done < .jobs.txt 
+done < .projetos.txt

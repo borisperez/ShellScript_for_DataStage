@@ -1,0 +1,21 @@
+ # set -x
+dsjob -lprojects >.projetos 2>/dev/null
+
+while read proj
+do
+ # echo $proj
+  dsjob -ljobs $proj >.jobs 2>/dev/null
+  while read job
+  do
+   rep=`dsjob -report $proj $job | grep "start"| awk ' OFS="|" { print "'"$job"'", $3}' ` 2>/dev/null 
+    if [ $rep ] 
+    then
+     echo $rep | tr 'time' 'data' >> relatorio.tmp 
+     echo $rep
+#    exit 
+    fi
+   done < .jobs
+done < .projetos
+cat relatorio.tmp | sort -k2 > relatorio.txt
+rm relatorio.tmp
+cat relatorio.txt 

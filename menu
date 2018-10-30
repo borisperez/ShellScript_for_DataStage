@@ -1,0 +1,313 @@
+#!/bin/ksh
+
+trap "" 2
+d_MenuInic=/software/IS/Engine/Server/Configurations
+a_apoio1=menu1.${$}
+v_apoio="0"
+blk=$(tput blink)
+bol=$(tput bold)
+nul=$(tput sgr0)
+rev=$(tput rev)
+apg=$(tput dim)
+integer v_Line=0
+integer v_Opcao
+integer v_Ret=1
+integer v_Nivel=1
+integer v_Erro=0
+d_Menu[$v_Nivel]=$d_MenuInic
+
+function fn_Repeat
+{
+v_Repeat=""
+integer v_i=1
+integer v_r=$1
+while (( $v_i <= $v_r ))
+do
+        v_Repeat="${v_Repeat}${2}"
+        v_i=$v_i+1
+done
+
+echo "$v_Repeat\c"
+return
+}
+
+function fn_Mensagem
+{
+v_Mensagem=$1
+integer v_NString=${#v_Mensagem} 
+integer v_i=1
+integer v_Borda=78-$v_NString
+v_Borda=$v_Borda/2
+echo ""
+fn_Repeat $v_Borda " ";echo "+\c";fn_Repeat $v_NString -;echo "+"
+fn_Repeat $v_Borda " ";echo "+\c";echo "${bol}$v_Mensagem${nul}\c";echo "+"
+fn_Repeat $v_Borda " ";echo "+\c";fn_Repeat $v_NString -;echo "+"
+sleep 3
+}
+
+function fn_fim_menu
+{
+rm -f $a_apoio1
+}
+
+function fn_TelaPrin
+{
+clear
+print "+\c";fn_Repeat 108 -;print "+"
+print "|                          S A N I T Y C H E C K  N O  A M B I E N T E  D E  P R O D U C A O                 |"
+print "|                          $(date +%d/%m/%Y)         $(tput blink)   Administracao DataStage $(tput sgr0)                             $(date +%H:%M)  |"
+print "+\c";fn_Repeat 108 -;print "+"
+echo; echo
+}
+
+function fn_CarregaMenu
+{
+v_Line=0
+fn_Apoio $1 
+fn_TelaPrin
+cat ${a_apoio1} | \
+while read line
+do
+v_Line=v_Line+1
+	if [ -d ${d_Menu[$v_Nivel]}/${line} ]
+	then
+  	   if  [ $( find ${d_Menu[$v_Nivel]}/${line}/ -name *.menu 2>/dev/null | wc -l ) = 0 ]
+	   then
+		  print "              \n\t\t                    ${bol} $v_Line ${apg} - ${line}${nul}"
+	   else
+		  print "              \n\t\t                    ${bol} $v_Line ${nul} - ${line}"
+	   fi
+	else
+	   print "              \n\t\t                    ${bol} $v_Line ${nul} - ${line%%.menu}" 
+	fi
+done 
+print "              \n\t\t                    ${bol} . ${nul} - FIM"
+print "\n\t      Escolha o apt_config_file para ser validado e tecle" $(tput bold) "ENTER:" $(tput sgr0) "\c"
+}
+function fn_Apoio
+{
+if [ $1 = "0" ]
+  then
+    ls ${d_Menu[$v_Nivel]}| grep ".apt"  > ${a_apoio1} 
+  else  
+    cat .menufn > ${a_apoio1} 
+  fi
+}
+
+function fn_ClearLog
+{
+set -x
+rm -f .log
+}
+
+### function fn_MontaLog
+### {
+#### }
+
+function fn_CheckDS
+{
+set -x
+  for i in `cat .nodes | grep computernode`
+  do
+     v_node_name=`echo $i | awk -F"|" ' {print $1}'`
+     for y in `cat .tools; cat .aptfile | grep $v_node_name`
+     do
+        v_tipo_tool=`echo $y | awk -F"|" ' {print $1}'`
+        v_dir=`echo $y | awk -F"|" ' {print $2}'`
+        fn_RshGet $v_node_name $v_tipo_tool $v_dir
+     done
+  done
+}
+
+function fn_CheckDB2
+{
+set -x
+  for i in `cat .nodes | grep datanode`
+  do
+     v_node_name=`echo $i | awk -F"|" ' {print $1}'`
+     for y in `cat .tools | grep DB2; cat .aptfile | grep $v_node_name`
+     do
+        v_tipo_tool=`echo $y | awk -F"|" ' {print $1}'`
+        v_dir=`echo $y | awk -F"|" ' {print $2}'`
+        fn_RshGet $v_node_name $v_tipo_tool $v_dir
+     done
+  done
+}
+
+function fn_CheckSAS
+{
+  for i in `cat .nodes | grep sas`
+  do
+     v_node_name=`echo $i | awk -F"|" ' {print $1}'`
+     for y in `cat .tools | grep SAS ; cat .tools | grep Geral`
+     do
+        v_tipo_tool=`echo $y | awk -F"|" ' {print $1}'`
+        v_dir=`echo $y | awk -F"|" ' {print $2}'`
+        fn_RshGet $v_node_name $v_tipo_tool $v_dir
+     done
+  done
+}
+
+function fn_CheckAPTConfig
+{
+  v_node=`echo $1 | awk -F"|" '{ print $1 }'`
+  v_dir=`echo $1  | awk -F"|" '{ print $2 }'`
+  fn_RshGet $v_node "CheckAPT" $v_dir
+}
+
+function fn_TrataAPTConfig
+{
+set -x
+cat $1 | egrep "fastname|resource" | tr -d '\"' | awk ' { print $1,$2,$3}' | \
+  awk ' OFS="|" {
+   if ( NF == 2 ) {
+     cpnode=$2
+     next
+    } else {
+     resource=$3
+   }
+   print "aptfile", cpnode, resource
+  }' | cut -d"/" -f1-4| awk -F"|" 'OFS="|" {print $1,$3,$2}' | sort | uniq > .aptfile
+}
+
+function fn_ALL
+{
+fn_CheckDS
+fn_CheckDB2
+fn_CheckSAS
+}
+
+
+function fn_RshGet
+{
+errofile=""
+errouser=""
+errofilespace=""
+   cabec=`echo " $1| Check $2 | dir $3 | QtdFiles="`
+   file=`rsh $1 " ls $3 2>.errofile | wc -l | tr -d [:space:]"`
+   if [ $file -eq 0 ]
+    then
+     errofile="Erro-File "`rsh $1 "cat .errofile"`
+   fi
+   if [ `echo $file| wc -c` -eq 1 ]
+   then
+     file="0"
+   fi
+   user=`rsh $1 " lsuser $v_user 2> .errouser"`
+   if [ -z `echo $user` ]
+    then
+     errouser="Erro-User "`rsh $1 "cat .errouser"`
+   fi
+   userid=`echo $user | awk -F"," '{ print $1}'`
+   filespace=`rsh $1 "df -k $3 2>.errospace | grep -v Filesystem "`
+   if [ -z "$filespace" ]
+   then
+     errofilespace="Erro-FileSpace "`rsh $1 "cat .errospace"`
+     filespaces="0"
+   else
+     filespaces=`echo $filespace | awk ' OFS="-" { print $4, $6}'`
+   fi
+   if [ $filespaces != "0" ]
+   then
+     errofilespace=`echo $filespace | grep -v Filesystem | tr -d '%' | \
+     awk '{
+           if ( $4 > 50 ) { print "Erro-FileSpace FileSystem quase cheio ="$4"%" }
+           if ( $6 > 90 ) { print "Erro-FileSpace Tabela de Inodes quase cheia ="$6"%" }
+         }'`
+    fi
+   log=$cabec$file"|"$errofile"|"$userid"|"$errouser"|"$filespaces"|"$errofilespace
+   echo $log >> .log
+}
+
+function fn_Execute
+{
+set -x
+   if [ $1 = "fn_CheckDS" ]
+   then
+      fn_CheckDS
+   elif [ $1 = "fn_CheckDB2" ]
+   then
+    fn_CheckDB2
+   elif [ $1 = "fn_CheckSAS" ]
+    then
+    fn_CheckSAS
+   elif [ $1 = "fn_ALL" ]
+    then
+    fn_ALL
+   fi
+}
+
+
+fn_ClearLog
+fn_TrataAPTConfig /software/IS/Engine/Server/Configurations/default_edwp.apt
+fn_Execute "fn_CheckDB2"
+
+
+while [ $v_Ret = 1 ]
+do
+	fn_CarregaMenu ${v_apoio}
+	read v_Opcao 
+        if [ $? -ne 0 ] || (( $v_Opcao < 0 )) || (( $v_Opcao > $(wc -l ${a_apoio1} | tr -s ' ' ':' | cut -f2 -d':' ) ))
+	then
+		v_Erro=$v_Erro+1
+		if (( $v_Erro > 3 ))
+		then
+			if (( $v_Nivel == 1 ))
+	                then
+	                        break
+	                else
+	                        d_Menu[$v_Nivel]=""
+	                        v_Nivel=v_Nivel-1
+				continue
+       		         fi
+		fi
+		fn_Mensagem "Entre com um número válido, tentativa [$v_Erro de 3]"
+		continue
+	else
+		v_Erro=0
+	fi
+	if (( $v_Opcao == 0 ))
+	then
+		if (( $v_Nivel == 1 ))
+		then
+			break
+		else
+			d_Menu[$v_Nivel]=""		
+			v_Nivel=v_Nivel-1
+			continue
+		fi
+	else 
+##		v_Objeto=${d_Menu[$v_Nivel]}/`head -$v_Opcao ${a_apoio1} | tail -1`
+                v_Objeto=`head -$v_Opcao ${a_apoio1} | tail -1`
+		if [ -z $v_Objeto ]
+		then
+		##	if  [ $( find $v_Objeto -name *.menu 2>/dev/null | wc -l ) = 0 ]
+	        ##		then
+				fn_Mensagem "Opcao nao existe!!!"
+				continue
+	##		fi
+	##		v_Nivel=v_Nivel+1
+	##		d_Menu[$v_Nivel]=/$v_Objeto
+		else
+			if [ $v_Objeto ] && [ ${v_apoio} = "0" ] 
+			then
+                               v_apt_conf=$v_Objeto
+                               v_apoio="1"
+                        elif  [ $v_Objeto ] && [ ${v_apoio} = "1" ] 
+                        then
+                               if [ $v_Objeto = "Voltar" ]
+                               then
+                                 v_apoio="0"
+                               else
+                                 $v_Objeto 
+                               fi
+			else
+				fn_Mensagem "Opcao nao existe!!!"
+			fi
+		fi
+	fi
+done
+fn_fim_menu
+exit;
+
+

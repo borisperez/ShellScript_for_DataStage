@@ -1,0 +1,13 @@
+echo " Insira o nome do Projeto "
+read projeto
+echo " Insira o nome do Job "
+read job
+
+dssh <<EOF > .jobno
+
+LOGTO $projeto 
+SELECT JOBNO
+FROM DS_JOBS
+WHERE NAME = '$job';
+EOF
+cat .jobno | grep -v ">" | grep -v "SQL+"| grep -v "DataStage"| grep -v "Copyright"| grep -v "bin"

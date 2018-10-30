@@ -1,0 +1,15 @@
+echo " Insira o nome do Projeto "
+read projeto
+echo " Insira o nome do Job "
+read job
+
+dssh <<EOF > .audit
+
+LOGTO $projeto 
+SELECT INSTANCE FMT '40T', SUBSTRING(DTM FROM 1 FOR 10) FMT '10L' AS MODDATE, 
+       MODIFIER FMT '20T'
+FROM DS_AUDIT
+WHERE CLASS = '2'
+AND INSTANCE = '$job';
+EOF
+cat .audit | grep -v ">" | grep -v "SQL+"| grep -v "DataStage"| grep -v "Copyright"| grep -v "bin"

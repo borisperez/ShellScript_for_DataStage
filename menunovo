@@ -1,0 +1,568 @@
+#!/bin/ksh
+
+trap "" 2
+
+#################### ------------------------------ Funcoes Linha de Cmd   ------------------- ####################
+function fn_Params
+{
+for p in `echo $* | awk -F"-" '{ print NF-1 }'` 
+do
+v_param=` echo $p | tr '[:space:]' | awk -F":" '{ print $1 }' `
+#if [ 
+done
+}
+#################### -------------------- Funcoes Check variaveis de ambiente ----------------- ####################
+function fn_CheckDSHOME
+{
+while [ `echo ${DSHOME}|wc -c` -eq 1 ]
+do
+  count=$count+1
+  if (( $count > 3 ))
+  then
+    exit
+  fi
+  fn_TelaPrin
+  fn_Mensagem  "Variavel de ambiente DSHOME nao identificada, Entre com caminho do home do DataStage"
+  read dshome
+  v=`( cd $dshome ; ls dsenv > /dev/null;echo $? )`
+  echo $v
+  if [ $v -eq 0 ]
+  then
+    export DSHOME=$dshome
+    . $DSHOME/dsenv
+  else
+    fn_Mensagem "Caminho do Home DataStage Invalido"
+  fi
+done
+}
+
+#################### ------------------------------- Funcoes Monta Menu ----------------------------- ####################
+function fn_MMain
+{
+fn_SetApoio 1
+}
+function fn_MEnv
+{
+fn_SetApoio 2
+}
+function fn_MAdm
+{
+fn_SetApoio 3
+}
+function fn_MMon
+{
+fn_SetApoio 4
+}
+function fn_Back
+{
+fn_SetApoio 6
+}
+function fn_MApt
+{
+fn_SetApoio 7
+}
+
+#################### ------------------------------ Funcoes Display ------------------------------ ####################
+function fn_Repeat
+{
+v_Repeat=""
+integer v_i=1
+integer v_r=$1
+while (( $v_i <= $v_r ))
+do
+        v_Repeat="${v_Repeat}${2}"
+        v_i=$v_i+1
+done
+
+echo "$v_Repeat\c"
+return
+}
+
+function fn_Mensagem
+{
+v_Mensagem=$1
+integer v_NString=${#v_Mensagem}
+integer v_i=1
+integer v_Borda=78-$v_NString
+v_Borda=$v_Borda/2
+
+sleep 2
+}
+
+function fn_fim_menu
+{
+rm -f $a_apoio
+}
+
+function fn_TelaPrin
+{
+clear
+print "+\c";fn_Repeat 108 -;print "+"
+print "|                          S A N I T Y C H E C K  N O  A M B I E N T E  D E  P R O D U C A O                 |"
+print "|                          $(date +%d/%m/%Y)         $(tput blink)   Administracao DataStage $(tput sgr0)                             $(date +%H:%M)  |"
+print "+\c";fn_Repeat 108 -;print "+"
+echo; echo
+}
+
+function fn_CarregaMenu
+{
+v_Line=0
+fn_MakeApoio $1
+fn_TelaPrin
+cat ${a_apoio} | awk -F"|" '{ print $1}' \
+while read line
+do
+    v_Line=v_Line+1
+    print "              \n\t\t                    ${bol} $v_Line ${nul} - ${line}"
+done
+print "              \n\t\t                    ${bol} . ${nul} - FIM"
+print "\n\t      Escolha a opcao e tecle" $(tput bold) "ENTER:" $(tput sgr0) "\c"
+}
+
+function fn_MakeApoio
+{
+# Menu 
+cat d_Menu[$1] > ${a_apoio}
+}
+
+function fn_SetApoio
+{
+v_apoio=$1
+}
+
+function fn_setparam
+{
+
+}
+#################### ------------------------------ Funcoes Admin ------------------------------ ####################
+function fn_Timeline
+{
+echo "Funcoes nao implantada"
+}
+function fn_Search
+{
+echo "Funcoes nao implantada"
+}
+function fn_Audit
+{
+echo "Funcoes nao implantada"
+}
+function fn_Joblog
+{
+echo "Funcoes nao implantada"
+}
+function fn_Back
+{
+echo "Funcoes nao implantada"
+}
+#################### ------------------------------ Funcoes Monitor ------------------------------ ####################
+function fn_Cpu
+{
+echo "Funcoes nao implantada"
+}
+function fn_Heap
+{
+echo "Funcoes nao implantada"
+}
+function fn_Disk
+{
+echo "Funcoes nao implantada"
+}
+function fn_Back
+{
+echo "Funcoes nao implantada"
+}
+#################### ------------------------------ Funcoes Check Ambientes ----------------------------- ####################
+### function fn_MontaLog
+### {
+#### }
+
+function fn_Check
+{
+# Cria todo o analise selecionado
+# $1 - pode ser (computernode, datanode ou DB2, sas) !!! arrumar arquivos de parametros .nodes e .tools -> 
+# deixando somente DS,DB2,SAS e ORACLE
+set -x
+  for i in `cat .nodes | grep -i $1`
+  do
+     v_node_name=`echo $i | awk -F"|" ' {print $1}'`
+     for y in `cat .tools | grep -i $1; cat .aptfile | grep $v_node_name`
+     do
+        v_tipo_tool=`echo $y | awk -F"|" ' {print $1}'`
+        v_dir=`echo $y | awk -F"|" ' {print $2}'`
+        echo $v_node_name" "$v_dir" "$v_tipo_tool > .check$1
+     done
+  done
+}
+
+function fn_CheckIn
+{
+ if [ $1 = "ALL" ]
+ then
+   cat .menuenv > .checkenv
+ else
+   echo $1 > .checkenv
+ fi   
+}
+
+function fn_ALL
+{
+for i in `cat .checkenv`
+do
+  fn_Check $i
+done
+}
+
+#################### ----------------------------------- Funcoes Sanity Check ---------------------------- ####################
+
+function fn_CheckAPTConfig
+{
+  v_node=`echo $1 | awk -F"|" '{ print $1 }'`
+  v_dir=`echo $1  | awk -F"|" '{ print $2 }'`
+  fn_RshGet $v_node "CheckAPT" $v_dir
+}
+
+function fn_TrataAPTConfig
+{
+echo "##########    APT CONFIG FILE  "$1"  ###############"
+cat $1 | egrep "fastname|resource" | tr -d '\"' | awk ' { print $1,$2,$3}' | \
+  awk ' OFS="|" {
+   if ( NF == 2 ) {
+     cpnode=$2
+     next
+    } else {
+     resource=$3
+   }
+   print "aptfile", cpnode, resource
+  }' | cut -d"/" -f1-4| awk -F"|" 'OFS="|" {print $1,$3,$2}' | sort | uniq > .aptfile
+}
+
+function fn_ChkDir
+{
+# $1 hostname
+# $2 filesystem
+   file=`rsh $1 " ls $2 2>.errofile | wc -l | tr -d [:space:]"  2> .erro `
+   if [ $? -eq 0 ]
+    then
+	  if [ $file -eq 0 ]
+	  then
+        errofile="Erro-File "`rsh $1 "cat .errofile"` 
+	  fi	
+   else
+      errofile="Erro-File "`cat .erro`
+   fi  
+   if [ `echo $file| wc -c` -eq 1 ]
+   then
+     file="0"
+   fi
+}
+
+function fn_ChkRsh
+{
+   ponto=`rsh $1 " rsh $2 hostname 2> .errohost" 2> .erro`
+}
+
+function fn_ChkUser
+{
+# $1 hostname
+   user=`rsh $1 " lsuser $v_user 2> .errouser" 2> .erro`
+    if [ $? -eq 0 ]
+    then
+       if [ -z "$user" ]
+       then
+          errouser="Erro-User "`rsh $1 "cat .errouser"`
+       fi
+   userid=`echo $user | awk -F"," '{ print $1}'`
+   else
+     errouser="Erro-User "`cat .erro`
+   fi
+}
+
+function fn_ChkSize
+{
+# $1 hostname
+# $2 filesystem
+   filespace=`rsh $1 "df -k $2 2>.errospace | grep -v Filesystem " 2> .erro`
+   if [ $? -eq 0 ]
+    then
+       if [ -z "$filespace" ]
+       then
+          errofilespace="Erro-FileSpace "`rsh $1 "cat .errospace"`
+          filespaces="0"
+       else
+          filespaces=`echo $filespace | awk ' OFS="-" { print $4, $6}'`
+       fi
+       if [ $filespaces != "0" ]
+       then
+          errofilespace=`echo $filespace | grep -v Filesystem | tr -d '%' | \
+          awk '{
+               if ( $4 > 50 ) { print "Erro-FileSpace FileSystem quase cheio ="$4"%" }
+               if ( $6 > 90 ) { print "Erro-FileSpace Tabela de Inodes quase cheia ="$6"%" }
+               }'`
+	    fi
+    else
+       errofilespace="Erro-FileSpace "`cat .erro`	
+    fi
+}
+
+function fn_RshGet
+{
+errofile=""
+errouser=""
+errofilespace=""
+   cabec=`echo " $1| Check $2 | dir $3 | QtdFiles="`
+   
+   ## ----------------Check NFS-----------------------------------------------------------------------
+
+   ## ----------------Check User-----------------------------------------------------------------------
+
+   ## ----------------Check Size-----------------------------------------------------------------------
+
+	## ---------------------------------------------------------------------------------------
+   log=$cabec$file"|"$errofile"|"$userid"|"$errouser"|"$filespaces"|"$errofilespace
+   echo $log >> .log
+}
+
+function fn_Execute
+{
+   if [ $1 = "fn_CheckDS" ]
+   then
+      fn_CheckDS
+   elif [ $1 = "fn_CheckDB2" ]
+   then
+    fn_CheckDB2
+   elif [ $1 = "fn_CheckSAS" ]
+    then
+    fn_CheckSAS
+   elif [ $1 = "fn_ALL" ]
+    then
+    fn_ALL
+   fi
+}
+#################### ------------------------------------- Funcoes de Log ------------------------------ ####################
+
+function fn_ClearLog
+{
+rm -f .log
+}
+
+#################### ------------------------------------- Funcoes Cria Menu ------------------------------ ####################
+
+function fn_makeMenu
+{
+# Menu principal 1
+echo "Administracao DataStage |fn_MAdm" > .menumain
+echo "Check Environment |fn_MEnv" >> .menumain
+echo "Monitor Environment |fn_MMon" >> .menumain
+# Menu dos ambientes 2
+echo "DataStage Enviroment |fn_CheckDS" > .menuenv
+echo "DB2 Enviroment |fn_CheckDB2" >> .menuenv
+echo "SAS Enviroment |fn_CheckSAS" >> .menuenv
+echo "All Enviroment |fn_ALL" >> .menuenv
+echo "Back |fn_Back" >> .menuenv
+# Menu funcoes de sanity check 3
+echo "Check Filesystem |fn_ChkDir" > .menufnck
+echo "Check User/Group Id |fn_ChkUser" >> .menufnck
+echo "Check Filesystem Size |fn_ChkSize" >> .menufnck
+echo "Check rsh |fn_ChkRsh" >> .menufnck
+echo "Check NFS/CFS |fn_ChkNfs" >> .menufnck
+echo "Check All |fn_ChkAll" >> .menufnck
+echo "Back |fn_Back" >> .menufnck
+# Menu admin 4
+echo "Job TimeLine |fn_Timeline" > .menuadmin
+echo "Search Job |fn_Search" >> .menuadmin
+echo "Audit Job |fn_Audit" >> .menuadmin
+echo "Job log |fn_Joblog" >> .menuadmin
+echo "Back |fn_Back" >> .menuadmin 
+# Menu monitoramento 5
+echo "CPU monitor|fn_Cpu" > .menumon
+echo "Memory monitor|fn_Heap" >> .menumon
+echo "Disk monitor|fn_Disk" >> .menumon
+echo "Back |fn_Back" >> .menumon
+# Menu Voltar 6
+echo "Back to Main |fn_MMain" > .menuback
+echo "Back to Enviroment |fn_MEnv" >> .menuback
+echo "Back to Admin |fn_MAdm" >> .menuback
+echo "Back to Monitor |fn_MMon" >> .menuback
+echo "Back to Check Enviroment |fn_ChkEnv" >> .menuback
+echo "Back to Apt Config File |fn_MApt" >> .menuback
+# Menu selecione apt config file 7
+fn_MakeMeuapt
+}
+
+function fn_MakeMeuapt
+{
+for i in `ls $DSHOME/../Configurations/*.apt`
+do 
+  apt=`basename $i` 
+  echo apt"|fn_makeApt" >> .menuapt
+done
+}
+
+function fn_ArrayMenu
+{
+d_Menu[1]=.menumain
+d_Menu[2]=.menuenv
+d_Menu[3]=.menuadmin
+d_Menu[4]=.menumon
+d_Menu[5]=.menufnck
+d_Menu[6]=.menuback
+d_Menu[7]=.menuapt
+}
+
+function fn_RemoveMenu
+{
+rm -f .menu* 
+}
+
+#################### --------------------------------------- Main -------------------------------------- ####################
+fn_CheckDSHOME
+
+a_apoio=menu1.${$}
+integer v_apoio=0
+blk=$(tput blink)
+bol=$(tput bold)
+nul=$(tput sgr0)
+rev=$(tput rev)
+apg=$(tput dim)
+integer v_Line=0
+integer v_Opcao
+integer v_Ret=1
+integer v_Nivel=1
+integer v_Erro=0
+d_MenuInic=.menumain
+d_Menu[$v_Nivel]=$d_MenuInic
+v_apt_conf=""
+v_data=`date +"%d%m%Y_%H%M"`
+v_user=`whoami`
+
+if [ $# = 0 ]
+then
+
+fn_ClearLog
+  while [ $v_Ret = 1 ]
+  do
+        fn_CarregaMenu ${v_apoio}
+        read v_Opcao
+        if [ $? -ne 0 ] || (( $v_Opcao < 0 )) || (( $v_Opcao > $(wc -l ${a_apoio} | tr -s ' ' ':' | cut -f2 -d':' ) ))
+        then
+                v_Erro=$v_Erro+1
+                if (( $v_Erro > 3 ))
+                then
+                        if (( $v_Nivel == 1 ))
+                        then
+                                break
+                        else
+                                d_Menu[$v_Nivel]=""
+                                v_Nivel=v_Nivel-1
+                                continue
+                         fi
+                fi
+                fn_Mensagem "Entre com um número válido, tentativa [$v_Erro de 3]"
+                continue
+        else
+                v_Erro=0
+        fi
+        if (( $v_Opcao == 0 ))
+        then
+ #               if (( $v_Nivel == 1 ))
+ #               then
+ #                       break
+ #              else
+ #                       d_Menu[$v_Nivel]=""
+ #                       v_Nivel=v_Nivel-1
+                       continue
+ #              fi
+        else    
+                v_Objeto=`head -$v_Opcao ${a_apoio} | tail -1 | awk -F"|" '{ print $2}'`
+				v_DescObj=`head -$v_Opcao ${a_apoio} | tail -1 | awk -F"|" '{ print $1}'`
+                if [ -z $v_Objeto ]
+                then
+                    fn_Mensagem "Opcao nao existe!!!"
+                    continue
+                else
+                    $v_Objeto $v_DescObj 
+                fi
+        fi
+  done
+fi
+fn_fim_menu
+exit;
+                        fn_TrataAPTConfig $d_MenuInic/$v_Objeto
+                        echo $d_MenuInic/$v_Objeto
+#################################################################################################################################
+### Arquivos de configuracao
+#.nodes
+# caudwdsp02-app|computernode
+# caudwdsp03-app|computernode
+# caudwdsp05-app|computernode
+# caudwsasp03-app|sas
+# vcbx701cauapp|datanode
+# vcbx702cauapp|datanode
+# vcbx703cauapp|datanode
+# vcbx704cauapp|datanode
+# vcbx705cauapp|datanode
+# vcbx706cauapp|datanode
+# vcbx707cauapp|datanode
+# vcbx708cauapp|datanode
+# vcbx709cauapp|datanode
+# vcbx710cauapp|datanode
+# vcbx711cauapp|datanode
+# vcbx712cauapp|datanode
+# vcbx713cauapp|datanode
+# vcbx714cauapp|datanode
+# vcbx715cauapp|datanode
+# vcbx716cauapp|datanode
+# vcbx717cauapp|datanode
+# vcbx718cauapp|datanode
+# vcbx719cauapp|datanode
+# vcbx720cauapp|datanode
+# vcbx721cauapp|datanode
+# vcbx722cauapp|datanode
+# vcbx781cauapp|datanode
+
+# .tools
+# ORACLE|/software/oracle/bin
+# DB2|/software/db2/bin
+# SAS|/software/sasprod
+# DS|/IS/Projects
+# DS|/software/IS/Engine/Server/DSEngine
+
+# .aptfile
+# aptfile|/IS/Resource/Datasets|caudwdsp02-app
+# aptfile|/IS/Resource/Datasets|caudwdsp03-app
+# aptfile|/IS/Resource/Datasets|caudwdsp04-app
+# aptfile|/IS/Resource/Datasets|caudwdsp05-app
+# aptfile|/IS/Scratch/tmp|caudwdsp02-app
+# aptfile|/IS/Scratch/tmp|caudwdsp03-app
+# aptfile|/IS/Scratch/tmp|caudwdsp04-app
+# aptfile|/IS/Scratch/tmp|caudwdsp05-app
+# aptfile|/db2path/instedwp/NODE0000|vcbx781cauapp
+# aptfile|/db2path/instedwp/NODE0001|vcbx701cauapp
+# aptfile|/db2path/instedwp/NODE0002|vcbx701cauapp
+# aptfile|/db2path/instedwp/NODE0003|vcbx701cauapp
+# aptfile|/db2path/instedwp/NODE0004|vcbx701cauapp
+# aptfile|/db2path/instedwp/NODE0005|vcbx702cauapp
+# aptfile|/db2path/instedwp/NODE0006|vcbx702cauapp
+# aptfile|/db2path/instedwp/NODE0007|vcbx702cauapp
+# aptfile|/db2path/instedwp/NODE0008|vcbx702cauapp
+# aptfile|/db2path/instedwp/NODE0009|vcbx703cauapp
+# aptfile|/db2path/instedwp/NODE0010|vcbx703cauapp
+# aptfile|/db2path/instedwp/NODE0011|vcbx703cauapp
+# aptfile|/db2path/instedwp/NODE0012|vcbx703cauapp
+# aptfile|/db2path/instedwp/NODE0013|vcbx704cauapp
+# aptfile|/db2path/instedwp/NODE0014|vcbx704cauapp
+# aptfile|/db2path/instedwp/NODE0015|vcbx704cauapp
+
+### Menus
+# .menuenv
+# ORACLE
+# DB2
+# SAS
+# DS
+
+# .menufn
+# fn_ChkSize
+# fn_ChkUser
+# fn_ChkRsh
+# fn_ChkDir
